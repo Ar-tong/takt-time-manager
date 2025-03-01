@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Takt Time Manager Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"></script>
     <style>
         /* สไตล์เดิมทั้งหมดของ Merge Box */
         .merge-box {
@@ -65,14 +68,13 @@
     <!-- โหมดคำนวณ (ซ่อนไว้ตอนแรก) -->
     <div id="calcMode" style="display: none;">
         <div style="margin: 20px 0;">
-<h2>คำนวณ Takttime และสร้างกราฟ</h2>
+            <h2>คำนวณ Takttime และสร้างกราฟ</h2>
             <input type="text" id="fileName" placeholder="ชื่อไฟล์">
             <button onclick="saveFile()">💾 บันทึก</button>
             <button onclick="closeCalculator()">❌ ปิด</button>
         </div>
 
         <!-- ส่วนคำนวณเดิมทั้งหมด -->
-        
         <label>🕒 ชั่วโมงการทำงานต่อวัน: <input type="number" id="hours"></label>
         <label>📦 Customer need per week: <input type="number" id="customerNeedWeek"></label>
         <label>📅 Day of work: <input type="number" id="dayOfWork"></label>
@@ -102,302 +104,330 @@
     <button onclick="newFile()">➕ สร้างใหม่</button>
 
 <script>
-// ระบบไฟล์
-let currentFileKey = null;
-let chartInstance = null;
-
-// ตัวแปรเดิมทั้งหมด
-let stationData = [];
-let runtimeData = [];
-let mergeData = [];
-let actualOPData = {};
-let takttime = 0;
-
-// ฟังก์ชันระบบไฟล์
-function newFile() {
-    resetAllData();
-    document.getElementById('calcMode').style.display = 'block';
-    document.getElementById('galleryMode').style.display = 'none';
-}
-
-function closeCalculator() {
-    document.getElementById('calcMode').style.display = 'none';
-    document.getElementById('galleryMode').style.display = 'grid';
-}
-
-function saveFile() {
-    const fileName = document.getElementById('fileName').value || `file_${Date.now()}`;
-    const fileData = {
-        fileName,
-        hours: parseFloat(document.getElementById("hours").value),
-        customerNeedWeek: parseFloat(document.getElementById("customerNeedWeek").value),
-        dayOfWork: parseFloat(document.getElementById("dayOfWork").value),
-        stationData,
-        runtimeData,
-        mergeData,
-        actualOPData,
-        takttime,
-        timestamp: new Date().toISOString()
+    // กำหนดค่า Firebase
+    const firebaseConfig = {
+apiKey: "AIzaSyDSYAPp6qLI2pKKIVBl_H8JipWnMydldyA",
+  authDomain: "lean-8050e.firebaseapp.com",
+  databaseURL: "https://lean-8050e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "lean-8050e",
+  storageBucket: "lean-8050e.firebasestorage.app",
+  messagingSenderId: "986146640209",
+  appId: "1:986146640209:web:707be0c30a6e1b15e38370",
     };
 
-    const key = currentFileKey || `file_${Date.now()}`;
-    try {
-        localStorage.setItem(key, JSON.stringify(fileData));
-    } catch (e) {
-        console.error('Local Storage is full or data is too large');
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // ระบบไฟล์
+    let currentFileKey = null;
+    let chartInstance = null;
+
+    // ตัวแปรเดิมทั้งหมด
+    let stationData = [];
+    let runtimeData = [];
+    let mergeData = [];
+    let actualOPData = {};
+    let takttime = 0;
+
+    // ฟังก์ชันระบบไฟล์
+    function newFile() {
+        resetAllData();
+        document.getElementById('calcMode').style.display = 'block';
+        document.getElementById('galleryMode').style.display = 'none';
     }
-    updateGallery();
-    closeCalculator();
-}
 
-function updateGallery() {
-    const gallery = document.getElementById('galleryMode');
-    gallery.innerHTML = '';
-
-    for(let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        const fileData = JSON.parse(localStorage.getItem(key));
-
-        const card = document.createElement('div');
-        card.className = 'file-card';
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.textContent = '×';
-        deleteBtn.onclick = () => deleteFile(key);
-        card.appendChild(deleteBtn);
-
-        const title = document.createElement('h3');
-        title.textContent = `📁 ${fileData.fileName}`;
-        card.appendChild(title);
-
-        const takttimeText = document.createElement('p');
-        takttimeText.textContent = `Takttime: ${fileData.takttime?.toFixed(2) || 'N/A'}`;
-        card.appendChild(takttimeText);
-
-        const timestamp = document.createElement('small');
-        timestamp.textContent = new Date(fileData.timestamp).toLocaleDateString();
-        card.appendChild(timestamp);
-
-        card.onclick = () => openFile(key);
-        gallery.appendChild(card);
+    function closeCalculator() {
+        document.getElementById('calcMode').style.display = 'none';
+        document.getElementById('galleryMode').style.display = 'grid';
     }
-}
 
-function deleteFile(key) {
-    if(confirm('ลบไฟล์นี้ใช่หรือไม่?')) {
-        localStorage.removeItem(key);
-        updateGallery();
+    function saveFile() {
+        const fileName = document.getElementById('fileName').value || `file_${Date.now()}`;
+        const user = firebase.auth().currentUser; // ข้อมูลผู้ใช้ปัจจุบัน
+        const fileData = {
+            fileName,
+            hours: parseFloat(document.getElementById("hours").value),
+            customerNeedWeek: parseFloat(document.getElementById("customerNeedWeek").value),
+            dayOfWork: parseFloat(document.getElementById("dayOfWork").value),
+            stationData,
+            runtimeData,
+            mergeData,
+            actualOPData,
+            takttime,
+            timestamp: new Date().toISOString(),
+            owner: user.uid // เพิ่มฟิลด์ owner
+        };
+
+        const key = currentFileKey || `file_${Date.now()}`;
+        database.ref('files/' + key).set(fileData)
+            .then(() => {
+                alert('บันทึกข้อมูลสำเร็จ');
+                updateGallery();
+                closeCalculator();
+            })
+            .catch((error) => {
+                console.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ', error);
+            });
     }
-}
 
-function openFile(key) {
-    const fileData = JSON.parse(localStorage.getItem(key));
-    currentFileKey = key;
+    function updateGallery() {
+        const gallery = document.getElementById('galleryMode');
+        gallery.innerHTML = '';
 
-    // โหลดข้อมูลเดิม
-    document.getElementById('fileName').value = fileData.fileName;
-    document.getElementById('hours').value = fileData.hours;
-    document.getElementById('customerNeedWeek').value = fileData.customerNeedWeek;
-    document.getElementById('dayOfWork').value = fileData.dayOfWork;
-    
-    stationData = fileData.stationData || [];
-    runtimeData = fileData.runtimeData || [];
-    mergeData = fileData.mergeData || [];
-    actualOPData = fileData.actualOPData || {};
-    takttime = fileData.takttime || 0;
+        database.ref('files').once('value', (snapshot) => {
+            snapshot.forEach((childSnapshot) => {
+                const fileData = childSnapshot.val();
+                const key = childSnapshot.key;
 
-    updateTable();
-    updateCharts();
-    document.getElementById('calcMode').style.display = 'block';
-    document.getElementById('galleryMode').style.display = 'none';
-}
+                const card = document.createElement('div');
+                card.className = 'file-card';
 
-// ฟังก์ชันคำนวณเดิมทั้งหมด
-function calculate() {
-    const hours = Math.max(0, parseFloat(document.getElementById("hours").value) || 0);
-    const customerNeedWeek = Math.max(0, parseFloat(document.getElementById("customerNeedWeek").value) || 0);
-    const dayOfWork = Math.max(1, parseFloat(document.getElementById("dayOfWork").value) || 1);
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = '×';
+                deleteBtn.onclick = () => deleteFile(key);
+                card.appendChild(deleteBtn);
 
-    const workingTimePerDay = hours * 60;
-    const customerNeedPerDay = customerNeedWeek / dayOfWork;
-    takttime = customerNeedPerDay > 0 ? workingTimePerDay / customerNeedPerDay : 0;
+                const title = document.createElement('h3');
+                title.textContent = `📁 ${fileData.fileName}`;
+                card.appendChild(title);
 
-    updateTable();
-    updateCharts();
-}
+                const takttimeText = document.createElement('p');
+                takttimeText.textContent = `Takttime: ${fileData.takttime?.toFixed(2) || 'N/A'}`;
+                card.appendChild(takttimeText);
 
-function pasteData() {
-    const data = document.getElementById("pasteArea").value;
-    const rows = data.split("\n");
+                const timestamp = document.createElement('small');
+                timestamp.textContent = new Date(fileData.timestamp).toLocaleDateString();
+                card.appendChild(timestamp);
 
-    stationData = [];
-    runtimeData = [];
-    mergeData = [];
-    actualOPData = {};
+                card.onclick = () => openFile(key);
+                gallery.appendChild(card);
+            });
+        });
+    }
 
-    rows.forEach(row => {
-        const cols = row.split("\t");
-        if (cols.length >= 4) {
-            const station = cols[0].trim();
-            const merge = cols[3].trim();
-            const runtime = parseFloat(cols[2].trim()) || 0;
-
-            if (station && merge && runtime > 0) {
-                stationData.push(station);
-                runtimeData.push(runtime);
-                mergeData.push(merge);
-                actualOPData[merge] = 0;
-            }
+    function deleteFile(key) {
+        if (confirm('ลบไฟล์นี้ใช่หรือไม่?')) {
+            database.ref('files/' + key).remove()
+                .then(() => {
+                    updateGallery();
+                })
+                .catch((error) => {
+                    console.error('เกิดข้อผิดพลาดในการลบไฟล์: ', error);
+                });
         }
-    });
-
-    calculate();
-}
-
-function updateTable() {
-    const tableBody = document.getElementById("dataTable");
-    tableBody.innerHTML = "";
-
-    const mergedData = mergeData.reduce((acc, key, i) => {
-        acc[key] = (acc[key] || 0) + runtimeData[i];
-        return acc;
-    }, {});
-
-    Object.entries(mergedData).forEach(([key, runtime]) => {
-        const useOP = takttime > 0 ? (runtime / takttime) : 0;
-        const actualOP = Math.max(0, parseFloat(actualOPData[key]) || 0);
-        const cycleTime = actualOP > 0 ? (runtime / actualOP).toFixed(2) : "N/A";
-        const output = actualOP > 0 ? Math.round((60 / runtime) * actualOP) : "N/A";
-        const min = output !== "N/A" ? Math.round(output / 1.5) : "N/A";
-        const max = output !== "N/A" ? Math.round(output * 1.5) : "N/A";
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${key}</td><td>${key}</td><td>${runtime.toFixed(2)}</td>
-            <td>${useOP.toFixed(2)}</td>
-            <td>
-    		<input type="number" step="0.1" value="${actualOP}" 
-        	onchange="updateActualOP(event, '${key}')"
-        	onclick="event.stopPropagation();" 
-       		onfocus="this.select();">
-	</td>
-            <td>${cycleTime}</td><td>${output}</td><td>${min}</td><td>${max}</td>
-        `;
-        tableBody.appendChild(row);
-    });
-
-    updateMergeInfo();
-}
-
-function updateActualOP(event, key) {
-    actualOPData[key] = Math.max(0, parseFloat(event.target.value) || 0);
-    calculate();
-}
-
-function updateCharts() {
-    if (chartInstance && typeof chartInstance.destroy === 'function') {
-        chartInstance.destroy();
     }
 
-    const mergedData = mergeData.reduce((acc, key, i) => {
-        acc[key] = (acc[key] || 0) + runtimeData[i];
-        return acc;
-    }, {});
+    function openFile(key) {
+        database.ref('files/' + key).once('value', (snapshot) => {
+            const fileData = snapshot.val();
+            currentFileKey = key;
 
-    const mergeLabels = Object.keys(mergedData);
-    const cycleTimes = mergeLabels.map(key => 
-        (mergedData[key] / (actualOPData[key] || takttime)).toFixed(2)
-    );
+            // โหลดข้อมูลเดิม
+            document.getElementById('fileName').value = fileData.fileName;
+            document.getElementById('hours').value = fileData.hours;
+            document.getElementById('customerNeedWeek').value = fileData.customerNeedWeek;
+            document.getElementById('dayOfWork').value = fileData.dayOfWork;
+            
+            stationData = fileData.stationData || [];
+            runtimeData = fileData.runtimeData || [];
+            mergeData = fileData.mergeData || [];
+            actualOPData = fileData.actualOPData || {};
+            takttime = fileData.takttime || 0;
 
-    const ctx = document.getElementById('mixedChart').getContext('2d');
-    chartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: mergeLabels,
-            datasets: [
-                {
-                    label: 'Cycle Time',
-                    data: cycleTimes,
-                    backgroundColor: 'rgba(54, 162, 235, 0.5)'
-                },
-                {
-                    label: 'Takttime',
-                    data: new Array(mergeLabels.length).fill(takttime),
-                    borderColor: '#ff6384',
-                    type: 'line'
+            updateTable();
+            updateCharts();
+            document.getElementById('calcMode').style.display = 'block';
+            document.getElementById('galleryMode').style.display = 'none';
+        });
+    }
+
+    // ฟังก์ชันคำนวณเดิมทั้งหมด
+    function calculate() {
+        const hours = Math.max(0, parseFloat(document.getElementById("hours").value) || 0);
+        const customerNeedWeek = Math.max(0, parseFloat(document.getElementById("customerNeedWeek").value) || 0);
+        const dayOfWork = Math.max(1, parseFloat(document.getElementById("dayOfWork").value) || 1);
+
+        const workingTimePerDay = hours * 60;
+        const customerNeedPerDay = customerNeedWeek / dayOfWork;
+        takttime = customerNeedPerDay > 0 ? workingTimePerDay / customerNeedPerDay : 0;
+
+        updateTable();
+        updateCharts();
+    }
+
+    function pasteData() {
+        const data = document.getElementById("pasteArea").value;
+        const rows = data.split("\n");
+
+        stationData = [];
+        runtimeData = [];
+        mergeData = [];
+        actualOPData = {};
+
+        rows.forEach(row => {
+            const cols = row.split("\t");
+            if (cols.length >= 4) {
+                const station = cols[0].trim();
+                const merge = cols[3].trim();
+                const runtime = parseFloat(cols[2].trim()) || 0;
+
+                if (station && merge && runtime > 0) {
+                    stationData.push(station);
+                    runtimeData.push(runtime);
+                    mergeData.push(merge);
+                    actualOPData[merge] = 0;
                 }
-            ]
-        }
-    });
-}
+            }
+        });
 
-function updateMergeInfo() {
-    const container = document.getElementById("mergeInfoContainer");
-    container.innerHTML = "";
-
-    const mergedData = mergeData.reduce((acc, key, i) => {
-        acc[key] = (acc[key] || 0) + runtimeData[i];
-        return acc;
-    }, {});
-
-    Object.entries(mergedData).forEach(([key, runtime]) => {
-        const actualOP = Math.max(0, parseFloat(actualOPData[key]) || 0);
-        const cycleTime = (runtime / (actualOP || takttime)).toFixed(2);
-        const output = actualOP > 0 ? Math.round((60 / runtime) * actualOP) : 0;
-        const min = Math.round(output / 1.5);
-        const max = Math.round(output * 1.5);
-
-        const box = document.createElement('div');
-        box.className = 'merge-box';
-
-        const header = document.createElement('div');
-        header.className = 'merge-header';
-        header.textContent = key;
-        box.appendChild(header);
-
-        const ctRow = document.createElement('div');
-        ctRow.className = 'merge-row';
-        ctRow.innerHTML = `<span class="merge-label">C/T:</span><span class="merge-value">${cycleTime}</span>`;
-        box.appendChild(ctRow);
-
-        const opRow = document.createElement('div');
-        opRow.className = 'merge-row';
-        opRow.innerHTML = `<span class="merge-label">OP:</span><span class="merge-value">${actualOP.toFixed(1)}</span>`;
-        box.appendChild(opRow);
-
-        const maxRow = document.createElement('div');
-        maxRow.className = 'merge-row';
-        maxRow.innerHTML = `<span class="merge-label">MAX:</span><span class="merge-value">${max}</span>`;
-        box.appendChild(maxRow);
-
-        const minRow = document.createElement('div');
-        minRow.className = 'merge-row';
-        minRow.innerHTML = `<span class="merge-label">MIN:</span><span class="merge-value">${min}</span>`;
-        box.appendChild(minRow);
-
-        container.appendChild(box);
-    });
-}
-
-function resetAllData() {
-    currentFileKey = null;
-    stationData = [];
-    runtimeData = [];
-    mergeData = [];
-    actualOPData = {};
-    takttime = 0;
-    document.getElementById('fileName').value = '';
-    document.getElementById('pasteArea').value = '';
-    document.getElementById('dataTable').innerHTML = '';
-    document.getElementById('mergeInfoContainer').innerHTML = '';
-    if (chartInstance && typeof chartInstance.destroy === 'function') {
-        chartInstance.destroy();
+        calculate();
     }
-}
 
-// โหลดครั้งแรก
-document.addEventListener('DOMContentLoaded', () => updateGallery());
+    function updateTable() {
+        const tableBody = document.getElementById("dataTable");
+        tableBody.innerHTML = "";
+
+        const mergedData = mergeData.reduce((acc, key, i) => {
+            acc[key] = (acc[key] || 0) + runtimeData[i];
+            return acc;
+        }, {});
+
+        Object.entries(mergedData).forEach(([key, runtime]) => {
+            const useOP = takttime > 0 ? (runtime / takttime) : 0;
+            const actualOP = Math.max(0, parseFloat(actualOPData[key]) || 0);
+            const cycleTime = actualOP > 0 ? (runtime / actualOP).toFixed(2) : "N/A";
+            const output = actualOP > 0 ? Math.round((60 / runtime) * actualOP) : "N/A";
+            const min = output !== "N/A" ? Math.round(output / 1.5) : "N/A";
+            const max = output !== "N/A" ? Math.round(output * 1.5) : "N/A";
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${key}</td><td>${key}</td><td>${runtime.toFixed(2)}</td>
+                <td>${useOP.toFixed(2)}</td>
+                <td>
+                    <input type="number" step="0.1" value="${actualOP}" 
+                    onchange="updateActualOP(event, '${key}')"
+                    onclick="event.stopPropagation();" 
+                    onfocus="this.select();">
+                </td>
+                <td>${cycleTime}</td><td>${output}</td><td>${min}</td><td>${max}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+
+        updateMergeInfo();
+    }
+
+    function updateActualOP(event, key) {
+        actualOPData[key] = Math.max(0, parseFloat(event.target.value) || 0);
+        calculate();
+    }
+
+    function updateCharts() {
+        if (chartInstance && typeof chartInstance.destroy === 'function') {
+            chartInstance.destroy();
+        }
+
+        const mergedData = mergeData.reduce((acc, key, i) => {
+            acc[key] = (acc[key] || 0) + runtimeData[i];
+            return acc;
+        }, {});
+
+        const mergeLabels = Object.keys(mergedData);
+        const cycleTimes = mergeLabels.map(key => 
+            (mergedData[key] / (actualOPData[key] || takttime)).toFixed(2)
+        );
+
+        const ctx = document.getElementById('mixedChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: mergeLabels,
+                datasets: [
+                    {
+                        label: 'Cycle Time',
+                        data: cycleTimes,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)'
+                    },
+                    {
+                        label: 'Takttime',
+                        data: new Array(mergeLabels.length).fill(takttime),
+                        borderColor: '#ff6384',
+                        type: 'line'
+                    }
+                ]
+            }
+        });
+    }
+
+    function updateMergeInfo() {
+        const container = document.getElementById("mergeInfoContainer");
+        container.innerHTML = "";
+
+        const mergedData = mergeData.reduce((acc, key, i) => {
+            acc[key] = (acc[key] || 0) + runtimeData[i];
+            return acc;
+        }, {});
+
+        Object.entries(mergedData).forEach(([key, runtime]) => {
+            const actualOP = Math.max(0, parseFloat(actualOPData[key]) || 0);
+            const cycleTime = (runtime / (actualOP || takttime)).toFixed(2);
+            const output = actualOP > 0 ? Math.round((60 / runtime) * actualOP) : 0;
+            const min = Math.round(output / 1.5);
+            const max = Math.round(output * 1.5);
+
+            const box = document.createElement('div');
+            box.className = 'merge-box';
+
+            const header = document.createElement('div');
+            header.className = 'merge-header';
+            header.textContent = key;
+            box.appendChild(header);
+
+            const ctRow = document.createElement('div');
+            ctRow.className = 'merge-row';
+            ctRow.innerHTML = `<span class="merge-label">C/T:</span><span class="merge-value">${cycleTime}</span>`;
+            box.appendChild(ctRow);
+
+            const opRow = document.createElement('div');
+            opRow.className = 'merge-row';
+            opRow.innerHTML = `<span class="merge-label">OP:</span><span class="merge-value">${actualOP.toFixed(1)}</span>`;
+            box.appendChild(opRow);
+
+            const maxRow = document.createElement('div');
+            maxRow.className = 'merge-row';
+            maxRow.innerHTML = `<span class="merge-label">MAX:</span><span class="merge-value">${max}</span>`;
+            box.appendChild(maxRow);
+
+            const minRow = document.createElement('div');
+            minRow.className = 'merge-row';
+            minRow.innerHTML = `<span class="merge-label">MIN:</span><span class="merge-value">${min}</span>`;
+            box.appendChild(minRow);
+
+            container.appendChild(box);
+        });
+    }
+
+    function resetAllData() {
+        currentFileKey = null;
+        stationData = [];
+        runtimeData = [];
+        mergeData = [];
+        actualOPData = {};
+        takttime = 0;
+        document.getElementById('fileName').value = '';
+        document.getElementById('pasteArea').value = '';
+        document.getElementById('dataTable').innerHTML = '';
+        document.getElementById('mergeInfoContainer').innerHTML = '';
+        if (chartInstance && typeof chartInstance.destroy === 'function') {
+            chartInstance.destroy();
+        }
+    }
+
+    // โหลดครั้งแรก
+    document.addEventListener('DOMContentLoaded', () => updateGallery());
 </script>
 
 </body>
