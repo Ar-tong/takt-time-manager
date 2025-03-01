@@ -62,57 +62,70 @@
 </head>
 <body>
 
-    <!-- หน้าแสดงไฟล์ -->
-    <div id="galleryMode"></div>
-
-    <!-- โหมดคำนวณ (ซ่อนไว้ตอนแรก) -->
-    <div id="calcMode" style="display: none;">
-        <div style="margin: 20px 0;">
-            <h2>คำนวณ Takttime และสร้างกราฟ</h2>
-            <input type="text" id="fileName" placeholder="ชื่อไฟล์">
-            <button onclick="saveFile()">💾 บันทึก</button>
-            <button onclick="closeCalculator()">❌ ปิด</button>
-        </div>
-
-        <!-- ส่วนคำนวณเดิมทั้งหมด -->
-        <label>🕒 ชั่วโมงการทำงานต่อวัน: <input type="number" id="hours"></label>
-        <label>📦 Customer need per week: <input type="number" id="customerNeedWeek"></label>
-        <label>📅 Day of work: <input type="number" id="dayOfWork"></label>
-        
-        <h3>กรอกข้อมูลในตาราง</h3>
-        <textarea id="pasteArea" rows="5" cols="50" placeholder="วางข้อมูลจาก Excel ที่นี่"></textarea>
-        <button onclick="pasteData()">วางข้อมูล</button>
-
-        <h3>📋 ตารางข้อมูล</h3>
-        <table border="1">
-            <thead>
-                <tr>
-                    <th>Station</th><th>Merge</th><th>Runtime</th><th>Use OP</th>
-                    <th>Actual OP</th><th>Cycle Time</th><th>Out put</th><th>MIN</th><th>MAX</th>
-                </tr>
-            </thead>
-            <tbody id="dataTable"></tbody>
-        </table>
-
-        <h3>📊 กราฟ Cycle Time และ Takttime</h3>
-        <canvas id="mixedChart" width="400" height="200"></canvas>
-
-        <h3>📋 ข้อมูลของแต่ละ Merge</h3>
-        <div id="mergeInfoContainer" style="display: flex; flex-wrap: wrap; gap: 20px;"></div>
+    <!-- ฟอร์มล็อกอิน -->
+    <div id="loginSection">
+        <h2>ล็อกอิน</h2>
+        <input type="email" id="email" placeholder="อีเมล">
+        <input type="password" id="password" placeholder="รหัสผ่าน">
+        <button onclick="login()">ล็อกอิน</button>
     </div>
 
-    <button onclick="newFile()">➕ สร้างใหม่</button>
+    <!-- ส่วนแอปพลิเคชัน (ซ่อนไว้ตอนแรก) -->
+    <div id="appSection" style="display: none;">
+        <button onclick="logout()">ล็อกเอาท์</button>
+
+        <!-- หน้าแสดงไฟล์ -->
+        <div id="galleryMode"></div>
+
+        <!-- โหมดคำนวณ (ซ่อนไว้ตอนแรก) -->
+        <div id="calcMode" style="display: none;">
+            <div style="margin: 20px 0;">
+                <h2>คำนวณ Takttime และสร้างกราฟ</h2>
+                <input type="text" id="fileName" placeholder="ชื่อไฟล์">
+                <button onclick="saveFile()">💾 บันทึก</button>
+                <button onclick="closeCalculator()">❌ ปิด</button>
+            </div>
+
+            <!-- ส่วนคำนวณเดิมทั้งหมด -->
+            <label>🕒 ชั่วโมงการทำงานต่อวัน: <input type="number" id="hours"></label>
+            <label>📦 Customer need per week: <input type="number" id="customerNeedWeek"></label>
+            <label>📅 Day of work: <input type="number" id="dayOfWork"></label>
+            
+            <h3>กรอกข้อมูลในตาราง</h3>
+            <textarea id="pasteArea" rows="5" cols="50" placeholder="วางข้อมูลจาก Excel ที่นี่"></textarea>
+            <button onclick="pasteData()">วางข้อมูล</button>
+
+            <h3>📋 ตารางข้อมูล</h3>
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>Station</th><th>Merge</th><th>Runtime</th><th>Use OP</th>
+                        <th>Actual OP</th><th>Cycle Time</th><th>Out put</th><th>MIN</th><th>MAX</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTable"></tbody>
+            </table>
+
+            <h3>📊 กราฟ Cycle Time และ Takttime</h3>
+            <canvas id="mixedChart" width="400" height="200"></canvas>
+
+            <h3>📋 ข้อมูลของแต่ละ Merge</h3>
+            <div id="mergeInfoContainer" style="display: flex; flex-wrap: wrap; gap: 20px;"></div>
+        </div>
+
+        <button onclick="newFile()">➕ สร้างใหม่</button>
+    </div>
 
 <script>
     // กำหนดค่า Firebase
     const firebaseConfig = {
-apiKey: "AIzaSyDSYAPp6qLI2pKKIVBl_H8JipWnMydldyA",
-  authDomain: "lean-8050e.firebaseapp.com",
-  databaseURL: "https://lean-8050e-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "lean-8050e",
-  storageBucket: "lean-8050e.firebasestorage.app",
-  messagingSenderId: "986146640209",
-  appId: "1:986146640209:web:707be0c30a6e1b15e38370",
+        apiKey: "AIzaSyDSYAPp6qLI2pKKIVBl_H8JipWnMydldyA",
+        authDomain: "lean-8050e.firebaseapp.com",
+        databaseURL: "https://lean-8050e-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "lean-8050e",
+        storageBucket: "lean-8050e.firebasestorage.app",
+        messagingSenderId: "986146640209",
+        appId: "1:986146640209:web:707be0c30a6e1b15e38370"
     };
 
     // Initialize Firebase
@@ -425,6 +438,52 @@ apiKey: "AIzaSyDSYAPp6qLI2pKKIVBl_H8JipWnMydldyA",
             chartInstance.destroy();
         }
     }
+
+    // ฟังก์ชันล็อกอิน
+    function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        firebase.auth().signInWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                console.log('ล็อกอินสำเร็จ:', userCredential.user);
+                alert('ล็อกอินสำเร็จ');
+                document.getElementById('loginSection').style.display = 'none'; // ซ่อนส่วนล็อกอิน
+                document.getElementById('appSection').style.display = 'block';  // แสดงส่วนแอป
+            })
+            .catch((error) => {
+                console.error('เกิดข้อผิดพลาดในการล็อกอิน:', error.message);
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            });
+    }
+
+    // ฟังก์ชันล็อกเอาท์
+    function logout() {
+        firebase.auth().signOut()
+            .then(() => {
+                console.log('ล็อกเอาท์สำเร็จ');
+                alert('ล็อกเอาท์สำเร็จ');
+                document.getElementById('loginSection').style.display = 'block'; // แสดงส่วนล็อกอิน
+                document.getElementById('appSection').style.display = 'none';    // ซ่อนส่วนแอป
+            })
+            .catch((error) => {
+                console.error('เกิดข้อผิดพลาดในการล็อกเอาท์:', error);
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            });
+    }
+
+    // ตรวจสอบสถานะการล็อกอิน
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            console.log('ผู้ใช้ล็อกอินแล้ว:', user);
+            document.getElementById('loginSection').style.display = 'none'; // ซ่อนส่วนล็อกอิน
+            document.getElementById('appSection').style.display = 'block';  // แสดงส่วนแอป
+        } else {
+            console.log('ไม่มีผู้ใช้ล็อกอิน');
+            document.getElementById('loginSection').style.display = 'block'; // แสดงส่วนล็อกอิน
+            document.getElementById('appSection').style.display = 'none';    // ซ่อนส่วนแอป
+        }
+    });
 
     // โหลดครั้งแรก
     document.addEventListener('DOMContentLoaded', () => updateGallery());
